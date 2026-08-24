@@ -157,38 +157,40 @@ function main() {
     var h = context.canvas.height;  // as set in html
     var imagedata = context.createImageData(w,h);
  
-    // Define a rectangle in 2D with colors and coords at corners
-    var ulc = new Color(255,0,0,255); // upper left corner color: red
-    var urc = new Color(0,255,0,255); // upper right corner color: green
-    var llc = new Color(0,0,255,255); // lower left corner color: blue
-    var lrc = new Color(0,0,0,255); // lower right corner color: black
-    var ulx = 50, uly = 50; // upper left corner position
-    var urx = 200, ury = 50; // upper right corner position
-    var llx = 50, lly = 150; // lower left corner position
-    var lrx = 200, lry = 150; // lower right corner position
-    
-    // set up the vertical interpolation
-    var lc = ulc.clone();  // left color
-    var rc = urc.clone();  // right color
-    var vDelta = 1 / (lly-uly); // norm'd vertical delta
-    var lcDelta = llc.clone().subtract(ulc).scale(vDelta); // left vert color delta
-    var rcDelta = lrc.clone().subtract(urc).scale(vDelta); // right vert color delta
-    
-    // set up the horizontal interpolation
-    var hc = new Color(); // horizontal color
-    var hDelta = 1 / (urx-ulx); // norm'd horizontal delta
-    var hcDelta = new Color(); // horizontal color delta
-    
-    // do the interpolation
-    for (var y=uly; y<=lly; y++) {
-        hc.copy(lc); // begin with the left color
-        hcDelta.copy(rc).subtract(lc).scale(hDelta); // reset horiz color delta
-        for (var x=ulx; x<=urx; x++) {
-            drawPixel(imagedata,x,y,hc);
-            hc.add(hcDelta);
+    // Define a triangle in 2D with a color at each corner
+    // (a triangle only has 3 corners, so of cyan/magenta/yellow/pink
+    // we keep cyan, magenta, and yellow -- pink doesn't fit anymore)
+    var c0 = new Color(0,255,255,255);   // vertex 0 color: cyan
+    var c1 = new Color(255,0,255,255);   // vertex 1 color: magenta
+    var c2 = new Color(255,255,0,255);   // vertex 2 color: yellow
+    var x0 = 125, y0 = 50;  // vertex 0 position: top
+    var x1 = 50,  y1 = 150; // vertex 1 position: bottom left
+    var x2 = 200, y2 = 150; // vertex 2 position: bottom right
+
+    // bounding box of the triangle, clamped to the canvas
+    var minX = Math.max(0, Math.floor(Math.min(x0,x1,x2)));
+    var maxX = Math.min(w-1, Math.ceil(Math.max(x0,x1,x2)));
+    var minY = Math.max(0, Math.floor(Math.min(y0,y1,y2)));
+    var maxY = Math.min(h-1, Math.ceil(Math.max(y0,y1,y2)));
+
+    // twice the signed area of the triangle, used to normalize barycentric weights
+    var area = (x1-x0)*(y2-y0) - (x2-x0)*(y1-y0);
+
+    // scan the bounding box and use barycentric coordinates both to test
+    // whether a pixel lies inside the triangle and to interpolate its color
+    for (var y=minY; y<=maxY; y++) {
+        for (var x=minX; x<=maxX; x++) {
+            var w0 = ((x1-x)*(y2-y) - (x2-x)*(y1-y)) / area; // weight for c0
+            var w1 = ((x2-x)*(y0-y) - (x0-x)*(y2-y)) / area; // weight for c1
+            var w2 = 1 - w0 - w1;                            // weight for c2
+
+            if ((w0>=0) && (w1>=0) && (w2>=0)) { // inside the triangle
+                var pc = c0.clone().scale(w0);
+                pc.add(c1.clone().scale(w1));
+                pc.add(c2.clone().scale(w2));
+                drawPixel(imagedata,x,y,pc);
+            }
         } // end horizontal
-        lc.add(lcDelta);
-        rc.add(rcDelta);
     } // end vertical
     
     context.putImageData(imagedata, 0, 0); // display the image in the context
